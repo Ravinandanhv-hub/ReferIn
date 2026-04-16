@@ -1,0 +1,124 @@
+import asyncio
+import pytest
+import pytest_asyncio
+from httpx import AsyncClient, ASGITransport
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from app.db.database import Base, get_db
+from app.main import app
+from app.core.security import hash_password
+from app.models.user import User
+from app.models.job import Job
+
+TEST_DATABASE_URL = "sqlite+aiosqlite:///./test.db"
+
+engine = create_async_engine(TEST_DATABASE_URL, echo=False)
+TestSessionFactory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+
+@pytest.fixture(scope="session")
+def event_loop():
+    loop = asyncio.new_event_loop()
+    yield loop
+    loop.close()
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def setup_db():
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    yield
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+
+
+@pytest_asyncio.fixture
+async def db_session():
+    async with TestSessionFactory() as session:
+        yield session
+
+
+@pytest_asyncio.fixture
+async def client(db_session):
+    async def override_get_db():
+        try:
+            yield db_session
+            await db_session.commit()
+        except Exception:
+            await db_session.rollback()
+            raise
+
+    app.dependency_overrides[get_db] = override_get_db
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        yield ac
+    app.dependency_overrides.clear()
+
+
+@pytest_asyncio.fixture
+async def test_user(db_session):
+    user = User(
+        name="Test User",
+        email="test@example.com",
+        hashed_password=hash_password("password123"),
+        role="job_seeker",
+        skills=["Python", "React"],
+        experience=3,
+        location="Bangalore, India",
+    )
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+    return user
+
+
+@pytest_asyncio.fixture
+async def test_referrer(db_session):
+    user = User(
+        name="Test Referrer",
+        email="referrer@example.com",
+        hashed_password=hash_password("password123"),
+        role="referrer",
+        skills=["Python"],
+        experience=5,
+        location="San Francisco, US",
+    )
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+    return user
+
+
+@pytest_asyncio.fixture
+async def test_job(db_session):
+    job = Job(
+        title="Test Backend Developer",
+        company="Test Corp",
+        location="Bangalore, India",
+        type="full_time",
+        skills_required=["Python", "FastAPI"],
+        description="A test job listing",
+        source="Test",
+        apply_url="https://example.com/apply",
+        is_remote=False,
+        experience_min=2,
+        experience_max=5,
+    )
+    db_session.add(job)
+    await db_session.commit()
+    await db_session.refresh(job)
+    return job
+
+
+@pytest_asyncio.fixture
+async def auth_headers(client):
+    """Register a user and return auth headers."""
+    await client.post(
+        "/api/v1/auth/register",
+        json={"name": "Auth User", "email": "auth@example.com", "password": "password123", "role": "job_seeker"},
+    )
+    response = await client.post(
+        "/api/v1/auth/login",
+        json={"email": "auth@example.com", "password": "password123"},
+    )
+    token = response.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
