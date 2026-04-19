@@ -32,8 +32,9 @@ services:
         value: 3.11.12
 
   # ── Frontend Static Site ─────────────────────────────────
-  - type: static
+  - type: web
     name: referin
+    runtime: static
     rootDir: frontend
     buildCommand: npm ci && npm run build
     staticPublishPath: dist
