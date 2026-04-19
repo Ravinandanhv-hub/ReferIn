@@ -11,7 +11,6 @@ const STATUS_STYLES: Record<string, string> = {
 export default function ReferralsPage() {
   const dispatch = useAppDispatch();
   const { sent, received, loading, error } = useAppSelector((s) => s.referrals);
-  const { user } = useAppSelector((s) => s.auth);
   const [tab, setTab] = useState<'sent' | 'received'>('sent');
 
   useEffect(() => {

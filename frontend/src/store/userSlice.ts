@@ -1,6 +1,6 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import { usersApi } from "../api/usersApi";
-import type { User, UserUpdate } from "../types/user";
+import type { UserUpdate } from "../types/user";
 import type { Notification } from "../types/api";
 
 interface UserState {

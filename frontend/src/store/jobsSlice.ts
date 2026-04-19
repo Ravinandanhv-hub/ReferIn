@@ -5,7 +5,6 @@ import type {
   JobDetail,
   RecommendedJob,
   JobSearchParams,
-  JobListResponse,
 } from "../types/job";
 
 interface JobsState {
