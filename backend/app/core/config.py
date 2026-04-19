@@ -34,6 +34,8 @@ class Settings(BaseSettings):
 
     @property
     def cors_origins_list(self) -> List[str]:
+        if not self.CORS_ORIGINS:
+            return ["http://localhost:5173", "http://localhost:3000"]
         return json.loads(self.CORS_ORIGINS)
 
     class Config:
